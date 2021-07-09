@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>Actix Web Todos</title>
+		<link rel="stylesheet" href="/static/site.css">
+	</head>
+	<body>
+		<h1>Actix Web Todos</h1>
+		<hr>
+		<p><a href="/new">New Todo</a></p>
+		<h2>Today</h2>
+		<ul>
+		{% for todo in today_todos %}
+			<li id="{{ todo.id }}">
+				<input class="todo-checkbox" type="checkbox" name="complete" {% if todo.complete %}checked{% endif %}>
+				<span class="todo-title">{{ todo.title }}</span>
+				Due: <time datetime="{{ todo.due }}">{{ todo.due }}</time>
+				<a href="/edit/{{ todo.id }}">Edit</a>
+			</li>
+		{% else %}
+			<p>Nothing to do today</p>
+		{% endfor %}
+		</ul>
+		<h2>Upcoming</h2>
+		<ul>
+		{% for todo in upcoming_todos %}
+			<li id="{{ todo.id }}">
+				<input type="checkbox" name="complete" disabled>
+				<span class="todo-title">{{ todo.title }}</span>
+				Starts: <time datetime="{{ todo.startable }}">{{ todo.startable }}</time>
+				Due: <time datetime="{{ todo.due }}">{{ todo.due }}</time>
+				<a href="/edit/{{ todo.id }}">Edit</a>
+			</li>
+		{% else %}
+			<p>Nothing coming up</p>
+		{% endfor %}
+		</ul>
+		<script src="/static/site.js"></script>
+	</body>
+</html>
