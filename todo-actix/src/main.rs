@@ -22,7 +22,7 @@ async fn greet(web::Path(name): web::Path<String>) -> impl Responder {
 }
 
 #[post("/new")]
-async fn todo(
+async fn post_new_todo(
     todo_state: web::Data<AppStateWithTodoList>,
     query: web::Form<HashMap<String, String>>,
 ) -> Result<HttpResponse, Error> {
@@ -58,7 +58,7 @@ async fn todo(
 }
 
 #[post("/edit/{id}")]
-async fn update_todo(
+async fn post_edit_todo(
     web::Path(id): web::Path<String>,
     todo_state: web::Data<AppStateWithTodoList>,
     query: web::Form<HashMap<String, String>>,
@@ -106,7 +106,7 @@ async fn update_todo(
 }
 
 #[get("/new")]
-async fn new_form(tera: web::Data<tera::Tera>) -> Result<HttpResponse, Error> {
+async fn get_new_todo(tera: web::Data<tera::Tera>) -> Result<HttpResponse, Error> {
     let mut context = Context::new();
     context.insert("action", "Create");
     let s = tera
@@ -116,7 +116,7 @@ async fn new_form(tera: web::Data<tera::Tera>) -> Result<HttpResponse, Error> {
 }
 
 #[get("/edit/{id}")]
-async fn edit_form(
+async fn get_edit_todo(
     web::Path(id): web::Path<String>,
     todo_state: web::Data<AppStateWithTodoList>,
     tera: web::Data<tera::Tera>,
@@ -142,7 +142,7 @@ async fn edit_form(
 }
 
 #[post("/complete/{id}")]
-async fn complete_todo(
+async fn post_complete_todo(
     web::Path(id): web::Path<String>,
     todo_state: web::Data<AppStateWithTodoList>,
 ) -> Result<HttpResponse, Error> {
@@ -159,7 +159,7 @@ async fn complete_todo(
 }
 
 #[get("/")]
-async fn index(
+async fn get_index(
     todo_state: web::Data<AppStateWithTodoList>,
     tera: web::Data<tera::Tera>,
 ) -> Result<HttpResponse, Error> {
@@ -205,12 +205,13 @@ async fn main() -> std::io::Result<()> {
             // .app_data(todos.clone())
             .app_data(todo_state.clone())
             .data(tera)
-            .service(index)
-            .service(new_form)
-            .service(edit_form)
-            .service(todo)
-            .service(update_todo)
-            .service(complete_todo)
+            .service(greet)
+            .service(get_index)
+            .service(post_new_todo)
+            .service(get_new_todo)
+            .service(get_edit_todo)
+            .service(post_edit_todo)
+            .service(post_complete_todo)
             .service(actix_files::Files::new("/static", "./static"))
     })
     .bind("127.0.0.1:8080")?
