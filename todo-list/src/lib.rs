@@ -23,6 +23,12 @@ pub struct TodoList {
     items: HashMap<Uuid, Todo>,
 }
 
+impl Default for TodoList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TodoList {
     pub fn new() -> TodoList {
         TodoList {
@@ -74,6 +80,6 @@ impl TodoList {
     }
 
     pub fn get(&mut self, id: Uuid) -> Option<Todo> {
-        self.items.get(&id).map(|v| v.clone())
+        self.items.get(&id).cloned()
     }
 }
