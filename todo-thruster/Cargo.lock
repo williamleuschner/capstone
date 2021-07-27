@@ -152,6 +152,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dashmap"
+version = "4.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e77a43b28d0668df09411cb0bc9a8c2adc40f9a048afe863e05fd43251e8e39c"
+dependencies = [
+ "cfg-if 1.0.0",
+ "num_cpus",
+]
+
+[[package]]
 name = "deunicode"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1124,6 +1134,7 @@ checksum = "622d225fb92ff69385418e83075b90acfc7dc1dca6326b015f3acf37ef59e746"
 dependencies = [
  "async-trait",
  "bytes 1.0.1",
+ "dashmap",
  "fnv",
  "futures 0.3.15",
  "http 0.1.21",
@@ -1194,6 +1205,7 @@ dependencies = [
  "tera",
  "thruster",
  "todo-list",
+ "uuid 0.8.2",
 ]
 
 [[package]]

@@ -16,7 +16,7 @@
 				<input class="todo-checkbox" type="checkbox" name="complete" {% if todo.complete %}checked{% endif %}>
 				<span class="todo-title">{{ todo.title }}</span>
 				Due: <time datetime="{{ todo.due }}">{{ todo.due }}</time>
-				<a href="/edit/{{ todo.id }}">Edit</a>
+				<a href="/edit/?id={{ todo.id }}">Edit</a>
 			</li>
 		{% else %}
 			<p>Nothing to do today</p>
@@ -30,7 +30,7 @@
 				<span class="todo-title">{{ todo.title }}</span>
 				Starts: <time datetime="{{ todo.startable }}">{{ todo.startable }}</time>
 				Due: <time datetime="{{ todo.due }}">{{ todo.due }}</time>
-				<a href="/edit/{{ todo.id }}">Edit</a>
+				<a href="/edit/?id={{ todo.id }}">Edit</a>
 			</li>
 		{% else %}
 			<p>Nothing coming up</p>

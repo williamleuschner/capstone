@@ -6,7 +6,7 @@
 		const options = {
 			method: "POST"
 		};
-		fetch("/complete/" + id, options);
+		fetch("/complete/?id=" + id, options);
 	}
 
 	window.addEventListener("load", function() {

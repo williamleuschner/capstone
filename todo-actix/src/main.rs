@@ -1,4 +1,4 @@
-use actix_web::{error, get, post, web, App, Error, HttpResponse, HttpServer, Responder};
+use actix_web::{error, get, post, web, App, Error, HttpResponse, HttpServer};
 use chrono::{NaiveDate, Utc};
 use std::collections::HashMap;
 use std::ops::DerefMut;
@@ -15,39 +15,27 @@ fn redirect(to: &str) -> HttpResponse {
     HttpResponse::Found().header("Location", to).finish()
 }
 
-#[get("/greeting/{name}")]
-async fn greet(web::Path(name): web::Path<String>) -> impl Responder {
-    format!("Hello {}!", name)
-}
-
 #[post("/new")]
 async fn post_new_todo(
     todo_state: web::Data<AppStateWithTodoList>,
     query: web::Form<HashMap<String, String>>,
 ) -> Result<HttpResponse, Error> {
-    let success = if let Some(title) = query.get("title") {
-        if let Some(due_date) = query.get("due-date") {
-            if let Some(start_date) = query.get("start-date") {
-                let new = IncomingTodo {
-                    title: title.to_string(),
-                    startable: NaiveDate::parse_from_str(start_date, "%Y-%m-%d")
-                        .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
-                    due: NaiveDate::parse_from_str(due_date, "%Y-%m-%d")
-                        .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
-                };
-                let mut mutexed_todo_state = todo_state.list.lock().unwrap();
-                let mutexed_todos = mutexed_todo_state.deref_mut();
-                mutexed_todos.add(new);
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        }
-    } else {
-        false
-    };
+    let success = (|| {
+        let title = query.get("title")?;
+        let due_date = query.get("due-date")?;
+        let start_date = query.get("start-date")?;
+        let new = IncomingTodo {
+            title: title.to_string(),
+            startable: NaiveDate::parse_from_str(start_date, "%Y-%m-%d")
+                .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
+            due: NaiveDate::parse_from_str(due_date, "%Y-%m-%d")
+                .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
+        };
+        let mut mutexed_todo_state = todo_state.list.lock().unwrap();
+        let mutexed_todos = mutexed_todo_state.deref_mut();
+        mutexed_todos.add(new);
+        Some(())
+    })().is_some();
 
     if success {
         Ok(redirect("/"))
@@ -63,39 +51,31 @@ async fn post_edit_todo(
     query: web::Form<HashMap<String, String>>,
 ) -> Result<HttpResponse, Error> {
     println!("POST /edit/{}", id);
-    let success = if let Some(title) = query.get("title") {
-        if let Some(due_date) = query.get("due-date") {
-            if let Some(start_date) = query.get("start-date") {
-                if let Ok(uuid) = Uuid::parse_str(&id) {
-                    let mut mutexed_todo_state = todo_state.list.lock().unwrap();
-                    let mutexed_todos = mutexed_todo_state.deref_mut();
-                    if let Some(existing) = mutexed_todos.get(uuid) {
-                        let updated = Todo {
-                            id: existing.id,
-                            title: title.to_string(),
-                            complete: existing.complete,
-                            startable: NaiveDate::parse_from_str(start_date, "%Y-%m-%d")
-                                .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
-                            due: NaiveDate::parse_from_str(due_date, "%Y-%m-%d")
-                                .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
-                        };
-                        mutexed_todos.update(updated);
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        } else {
-            false
-        }
-    } else {
-        false
-    };
+    let success = (|| {
+        // Get todo list
+        let mut mutexed_todo_state = todo_state.list.lock().unwrap();
+        let mutexed_todos = mutexed_todo_state.deref_mut();
+
+        // Failably retrive query parameters.
+        let title = query.get("title")?;
+        let due_date = query.get("due-date")?;
+        let start_date = query.get("start-date")?;
+        let uuid = Uuid::parse_str(&id).ok()?;
+        let existing = mutexed_todos.get(uuid)?;
+
+        // Update the todo if everything was pulled out and parsed ok.
+        let updated = Todo {
+            id: existing.id,
+            title: title.to_string(),
+            complete: existing.complete,
+            startable: NaiveDate::parse_from_str(start_date, "%Y-%m-%d")
+                .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
+            due: NaiveDate::parse_from_str(due_date, "%Y-%m-%d")
+                .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
+        };
+        mutexed_todos.update(updated);
+        Some(())
+    })().is_some();
 
     if success {
         Ok(redirect("/"))
@@ -151,7 +131,7 @@ async fn post_complete_todo(
         let mutexed_todos = mutexed_todos_state.deref_mut();
         mutexed_todos.toggle_completed(uuid);
         let s = "{}";
-        Ok(HttpResponse::Ok().content_type("text/html").body(s))
+        Ok(HttpResponse::Ok().content_type("application/json").body(s))
     } else {
         Err(error::ErrorNotFound("unknown uuid"))
     }
@@ -204,7 +184,6 @@ async fn main() -> std::io::Result<()> {
             // .app_data(todos.clone())
             .app_data(todo_state.clone())
             .data(tera)
-            .service(greet)
             .service(get_index)
             .service(post_new_todo)
             .service(get_new_todo)

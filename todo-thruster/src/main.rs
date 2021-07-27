@@ -1,15 +1,20 @@
-use tera::{Context, Tera};
+use chrono::{NaiveDate, Utc};
 use hyper::Body;
+use tera::{Context, Tera};
 use thruster::context::hyper_request::HyperRequest;
 use thruster::context::typed_hyper_context::TypedHyperContext;
 use thruster::hyper_server::HyperServer;
+use thruster::middleware::query_params::query_params;
 use thruster::{async_middleware, middleware_fn};
 use thruster::{App, ThrusterServer};
 use thruster::{MiddlewareNext, MiddlewareResult};
-use chrono::Utc;
+use thruster::middleware::file::file;
 use todo_list::{IncomingTodo, Todo, TodoList};
+use uuid::Uuid;
 
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use thruster::errors::ThrusterError;
 
 type Ctx = TypedHyperContext<RequestConfig>;
 
@@ -23,6 +28,17 @@ struct RequestConfig {
     todos: Arc<RwLock<TodoList>>,
 }
 
+// I grabbed this function from the revision history of src/context/basic_hyper_context.rs because the author removed it as part of a "bug fix" that broke one of the examples.
+#[middleware_fn]
+async fn to_owned_request(
+    context: Ctx,
+    next: MiddlewareNext<Ctx>,
+) -> MiddlewareResult<Ctx> {
+    let context = next(context.into_owned_request()).await?;
+
+    Ok(context)
+}
+
 fn generate_context(request: HyperRequest, state: &ServerConfig, _path: &str) -> Ctx {
     Ctx::new(
         request,
@@ -33,8 +49,10 @@ fn generate_context(request: HyperRequest, state: &ServerConfig, _path: &str) ->
     )
 }
 
-fn not_found_404(mut context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
-    context.body = Body::from("<!DOCTYPE html>
+#[middleware_fn]
+async fn not_found_404(mut context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
+    context.body = Body::from(
+        "<!DOCTYPE html>
     <html lang=\"en\">
     <head>
     <meta charset=\"utf-8\">
@@ -43,75 +61,224 @@ fn not_found_404(mut context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResu
     <body>
     <h1>404 Not Found</h1>
     </body>
-    </html>");
+    </html>",
+    );
     context.content_type("text/html");
     context.status(404);
 
     Ok(context)
 }
 
-// fn greet(mut context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
-//     // let mut context = Ctx::new(context);
-//
-//     println!("{:?}", context.headers);
-//     if let Some(name) = context.params.get("name") {
-//         context.body = Body::from(format!("Hello, {}!", name));
-//     } else {
-//         context.body = Body::from("Hello, World!");
-//     }
-//
-//     context.set_header("Server".to_owned(), "thruster".to_owned());
-//     context.set_header("Content-Type".to_owned(), "text/plain".to_owned());
-//
-//     Box::new(future::ok(context))
-// }
+#[middleware_fn]
+async fn post_new_todo_old(mut context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
+    println!("query_params: {:?}", context.query_params);
+    let success = if let Some(title) = context.query_params.get("title") {
+        if let Some(due_date) = context.query_params.get("due-date") {
+            if let Some(start_date) = context.query_params.get("start-date") {
+                let new = IncomingTodo {
+                    title: title.to_string(),
+                    startable: NaiveDate::parse_from_str(start_date, "%Y-%m-%d")
+                        .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
+                    due: NaiveDate::parse_from_str(due_date, "%Y-%m-%d")
+                        .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
+                };
+                let todos = context.extra.todos.clone();
+                let mut todos = todos.write().unwrap();
+                todos.add(new);
+                true
+            } else {
+                println!("could not get start-date from query params");
+                false
+            }
+        } else {
+            println!("could not get due-date from query params");
+            false
+        }
+    } else {
+        println!("could not get title from query params");
+        false
+    };
 
-// #[middleware_fn]
-// async fn post_new_todo(mut context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
-//     let todos = context.extra.todos.clone();
-//     let mut todos = todos.write().unwrap();
-//
-//     let success = if let Some(title) = query.get("title") {
-//         if let Some(due_date) = query.get("due-date") {
-//             if let Some(start_date) = query.get("start-date") {
-//                 let new = IncomingTodo {
-//                     title: title.to_string(),
-//                     startable: NaiveDate::parse_from_str(start_date, "%Y-%m-%d")
-//                         .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
-//                     due: NaiveDate::parse_from_str(due_date, "%Y-%m-%d")
-//                         .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
-//                 };
-//                 let mut mutexed_todo_state = todo_state.list.lock().unwrap();
-//                 let mutexed_todos = mutexed_todo_state.deref_mut();
-//                 mutexed_todos.add(new);
-//                 true
-//             } else {
-//                 false
-//             }
-//         } else {
-//             false
-//         }
-//     } else {
-//         false
-//     };
-//     todos.
-//     // *latest_value = context
-//     //     .params
-//     //     .as_ref()
-//     //     .unwrap()
-//     //     .get("val")
-//     //     .unwrap()
-//     //     .to_string();
-//
-//     context.redirect("/");
-//
-//     Ok(context)
-// }
-
-fn post_edit_todo() {}
+    if success {
+        context.redirect("/index.html");
+    } else {
+        context.body = Body::from("request error");
+    }
+    Ok(context)
+}
 
 #[middleware_fn]
-async fn get_new_todo(mut request_context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
+async fn post_new_todo(context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
+    match context.get_body().await {
+        Ok((body, mut context)) => {
+            let form_data = parse_form_data(body);
+            // Because of the question marks, the closure should return false as soon as one of the
+            // hashmap lookups returns None.
+            let success = (|| {
+                // Extract body data.
+                let title = form_data.get("title")?;
+                let due_date = form_data.get("due-date")?;
+                let start_date = form_data.get("start-date")?;
+
+                // Get todo list struct.
+                let todos = context.extra.todos.clone();
+                let mut todos = todos.write().unwrap();
+                let new = IncomingTodo {
+                    title: title.to_string(),
+                    startable: NaiveDate::parse_from_str(start_date, "%Y-%m-%d")
+                        .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
+                    due: NaiveDate::parse_from_str(due_date, "%Y-%m-%d")
+                        .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
+                };
+                todos.add(new);
+
+                Some(())
+            })()
+            .is_some();
+
+            return if success {
+                context.redirect("/index.html");
+                Ok(context)
+            } else {
+                context.body = Body::from("request error");
+                Ok(context)
+            };
+        }
+        Err(e) => panic!("unrecoverable error: {:?}", e),
+    }
+}
+
+fn parse_form_data(body: String) -> HashMap<String, String> {
+    let mut form_hash = HashMap::new();
+
+    {
+        for query_piece in body.split('&') {
+            let mut query_iterator = query_piece.split('=');
+            let key = query_iterator.next().unwrap().to_owned();
+
+            match query_iterator.next() {
+                Some(val) => form_hash.insert(key, val.to_owned()),
+                None => form_hash.insert(key, "true".to_owned()),
+            };
+        }
+    }
+
+    form_hash
+}
+
+#[middleware_fn]
+async fn post_edit_todo_old(context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
+    let please_pass_borrow_checker = context.clone();
+    if let Ok((body, mut context)) = context.get_body().await {
+        let form_data = parse_form_data(body);
+        let success = if let Some(title) = form_data.get("title") {
+            if let Some(due_date) = form_data.get("due-date") {
+                if let Some(start_date) = form_data.get("start-date") {
+                    let url_params = context.params.as_ref().unwrap();
+                    if let Some(id) = url_params.get("id") {
+                        if let Ok(uuid) = Uuid::parse_str(&id) {
+                            let todos = context.extra.todos.clone();
+                            let mut todos = todos.write().unwrap();
+
+                            if let Some(existing) = todos.get(uuid) {
+                                let updated = Todo {
+                                    id: existing.id,
+                                    title: title.to_string(),
+                                    complete: existing.complete,
+                                    startable: NaiveDate::parse_from_str(start_date, "%Y-%m-%d")
+                                        .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
+                                    due: NaiveDate::parse_from_str(due_date, "%Y-%m-%d")
+                                        .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
+                                };
+                                todos.update(updated);
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        return if success {
+            context.redirect("/index.html");
+            Ok(context)
+        } else {
+            context.body = Body::from("request error");
+            Ok(context)
+        };
+    } else {
+        return Err(ThrusterError {
+            context: please_pass_borrow_checker,
+            message: "Request body missing".to_string(),
+            status: 400,
+            cause: None,
+        });
+    }
+}
+
+#[middleware_fn]
+async fn post_edit_todo(context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
+    if let Ok((body, mut context)) = context.get_body().await {
+        let form_data = parse_form_data(body);
+        // Because of the question marks, the closure should return false as soon as one of the
+        // hashmap lookups returns None.
+        let success = (|| {
+            // Extract body data, URL params.
+            let title = form_data.get("title")?;
+            let due_date = form_data.get("due-date")?;
+            let start_date = form_data.get("start-date")?;
+            let id_string = context.query_params.get("id")?;
+            let id = Uuid::parse_str(&id_string).ok()?;
+
+            // Get todo list struct.
+            let todos = context.extra.todos.clone();
+            let mut todos = todos.write().unwrap();
+
+            if let Some(existing) = todos.get(id) {
+                let updated = Todo {
+                    id: existing.id,
+                    title: title.to_string(),
+                    complete: existing.complete,
+                    startable: NaiveDate::parse_from_str(start_date, "%Y-%m-%d")
+                        .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
+                    due: NaiveDate::parse_from_str(due_date, "%Y-%m-%d")
+                        .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
+                };
+                todos.update(updated);
+            }
+            Some(())
+        })()
+        .is_some();
+
+        return if success {
+            context.redirect("/index.html");
+            Ok(context)
+        } else {
+            context.body = Body::from("request error");
+            Ok(context)
+        };
+    } else {
+        panic!("unrecoverable error")
+    }
+}
+
+#[middleware_fn]
+async fn get_new_todo(
+    mut request_context: Ctx,
+    _next: MiddlewareNext<Ctx>,
+) -> MiddlewareResult<Ctx> {
     let tera = request_context.extra.tera.clone();
     let tera = tera.read().unwrap();
     let mut tpl_context = Context::new();
@@ -125,12 +292,70 @@ async fn get_new_todo(mut request_context: Ctx, _next: MiddlewareNext<Ctx>) -> M
     Ok(request_context)
 }
 
-fn get_edit_todo() {}
+#[middleware_fn]
+async fn get_edit_todo(mut context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
+    let success = (|| {
+        let todos = context.extra.todos.clone();
+        let mut todos = todos.write().unwrap();
 
-fn post_complete_todo() {}
+        let id = context.query_params.get("id")?;
+        let uuid = Uuid::parse_str(&id).ok()?;
+        if let Some(this_todo) = todos.get(uuid) {
+            let mut tera_context = Context::new();
+            tera_context.insert("todo", &this_todo);
+            tera_context.insert("action", "Update");
+            let tera = context.extra.tera.clone();
+            let tera = tera.read().unwrap();
+            let s = tera.render("detail.html.j2", &tera_context).ok()?;
+            context.body = Body::from(s);
+        } else {
+            context.body = Body::from("unknown todo id");
+        }
+        Some(())
+    })()
+    .is_some();
+
+    if success {
+        Ok(context)
+    } else {
+        Err(ThrusterError {
+            context,
+            message: "invalid request".to_string(),
+            status: 400,
+            cause: None,
+        })
+    }
+}
+
+#[middleware_fn]
+async fn post_complete_todo(mut context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
+    let success = (|| {
+        let todos = context.extra.todos.clone();
+        let mut todos = todos.write().unwrap();
+
+        let id = context.query_params.get("id")?;
+        let uuid = Uuid::parse_str(&id).ok()?;
+        todos.toggle_completed(uuid);
+        context.body = Body::from("{}");
+        Some(())
+    })()
+    .is_some();
+
+    if success {
+        Ok(context)
+    } else {
+        Err(ThrusterError {
+            context,
+            message: "invalid request".to_string(),
+            status: 400,
+            cause: None,
+        })
+    }
+}
 
 #[middleware_fn]
 async fn get_index(mut req_context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
+    println!("GET / HTTP/1.1");
     let tera = req_context.extra.tera.clone();
     let tera = tera.read().unwrap();
     let todos = req_context.extra.todos.clone();
@@ -183,10 +408,29 @@ fn main() {
     // _app.use_middleware("/", profiling);
 
     // app.get("/greeting/:name", vec![greet]);
-    // app.post("/new", async_middleware!(Ctx, [post_new_todo]));
+    app.set404(async_middleware!(Ctx, [not_found_404]));
+    // This doesn't appear to work. I asked in the Thruster discord.
     app.get("/", async_middleware!(Ctx, [get_index]));
+    // But this one does, so I'm working around it temporarily until I get an answer.
+    app.get("/index.html", async_middleware!(Ctx, [get_index]));
+    app.post(
+        "/new",
+        async_middleware!(Ctx, [query_params, post_new_todo]),
+    );
     app.get("/new", async_middleware!(Ctx, [get_new_todo]));
-    // app.set404(vec![not_found_404]);
+    app.post(
+        "/edit",
+        async_middleware!(Ctx, [query_params, post_edit_todo]),
+    );
+    app.get(
+        "/edit",
+        async_middleware!(Ctx, [query_params, get_edit_todo]),
+    );
+    app.post(
+        "/complete",
+        async_middleware!(Ctx, [query_params, post_complete_todo]),
+    );
+    app.get("/static/*", async_middleware!(Ctx, [file]));
 
     let server = HyperServer::new(app);
     server.start("0.0.0.0", 8080);
