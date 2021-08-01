@@ -70,44 +70,6 @@ async fn not_found_404(mut context: Ctx, _next: MiddlewareNext<Ctx>) -> Middlewa
 }
 
 #[middleware_fn]
-async fn post_new_todo_old(mut context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
-    println!("query_params: {:?}", context.query_params);
-    let success = if let Some(title) = context.query_params.get("title") {
-        if let Some(due_date) = context.query_params.get("due-date") {
-            if let Some(start_date) = context.query_params.get("start-date") {
-                let new = IncomingTodo {
-                    title: title.to_string(),
-                    startable: NaiveDate::parse_from_str(start_date, "%Y-%m-%d")
-                        .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
-                    due: NaiveDate::parse_from_str(due_date, "%Y-%m-%d")
-                        .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
-                };
-                let todos = context.extra.todos.clone();
-                let mut todos = todos.write().unwrap();
-                todos.add(new);
-                true
-            } else {
-                println!("could not get start-date from query params");
-                false
-            }
-        } else {
-            println!("could not get due-date from query params");
-            false
-        }
-    } else {
-        println!("could not get title from query params");
-        false
-    };
-
-    if success {
-        context.redirect("/index.html");
-    } else {
-        context.body = Body::from("request error");
-    }
-    Ok(context)
-}
-
-#[middleware_fn]
 async fn post_new_todo(context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
     match context.get_body().await {
         Ok((body, mut context)) => {
@@ -164,68 +126,6 @@ fn parse_form_data(body: String) -> HashMap<String, String> {
     }
 
     form_hash
-}
-
-#[middleware_fn]
-async fn post_edit_todo_old(context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
-    let please_pass_borrow_checker = context.clone();
-    if let Ok((body, mut context)) = context.get_body().await {
-        let form_data = parse_form_data(body);
-        let success = if let Some(title) = form_data.get("title") {
-            if let Some(due_date) = form_data.get("due-date") {
-                if let Some(start_date) = form_data.get("start-date") {
-                    let url_params = context.params.as_ref().unwrap();
-                    if let Some(id) = url_params.get("id") {
-                        if let Ok(uuid) = Uuid::parse_str(&id) {
-                            let todos = context.extra.todos.clone();
-                            let mut todos = todos.write().unwrap();
-
-                            if let Some(existing) = todos.get(uuid) {
-                                let updated = Todo {
-                                    id: existing.id,
-                                    title: title.to_string(),
-                                    complete: existing.complete,
-                                    startable: NaiveDate::parse_from_str(start_date, "%Y-%m-%d")
-                                        .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
-                                    due: NaiveDate::parse_from_str(due_date, "%Y-%m-%d")
-                                        .unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1)),
-                                };
-                                todos.update(updated);
-                                true
-                            } else {
-                                false
-                            }
-                        } else {
-                            false
-                        }
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        } else {
-            false
-        };
-
-        return if success {
-            context.redirect("/index.html");
-            Ok(context)
-        } else {
-            context.body = Body::from("request error");
-            Ok(context)
-        };
-    } else {
-        return Err(ThrusterError {
-            context: please_pass_borrow_checker,
-            message: "Request body missing".to_string(),
-            status: 400,
-            cause: None,
-        });
-    }
 }
 
 #[middleware_fn]
