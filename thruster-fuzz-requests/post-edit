@@ -1,0 +1,11 @@
+POST /edit/?id=163c21fe-f7fb-4a30-8f00-d522a9a4013d HTTP/1.1
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Origin: http://localhost:8082
+Pragma: no-cache
+Accept-Encoding: gzip, deflate
+Host: localhost:8082
+Cache-Control: no-cache
+Content-Length: 95
+Connection: keep-alive
+
+title=dingbats+but+with+%25SPECIAL%25CHARACTERS%21%25&start-date=1970-01-01&due-date=9999-12-31

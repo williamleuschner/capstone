@@ -1,0 +1,8 @@
+GET /new HTTP/1.1
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Pragma: no-cache
+Cache-Control: no-cache
+Host: localhost:8081
+Accept-Encoding: gzip, deflate
+Connection: keep-alive
+

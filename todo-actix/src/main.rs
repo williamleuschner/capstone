@@ -1,4 +1,6 @@
 use actix_web::{error, get, post, web, App, Error, HttpResponse, HttpServer};
+use actix_web::middleware::Logger;
+use env_logger::Env;
 use chrono::{NaiveDate, Utc};
 use std::collections::HashMap;
 use std::ops::DerefMut;
@@ -166,6 +168,7 @@ async fn get_index(
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    env_logger::from_env(Env::default().default_filter_or("info")).init();
     let todo_state = web::Data::new(AppStateWithTodoList {
         list: Mutex::new(TodoList::new()),
     });
@@ -181,6 +184,8 @@ async fn main() -> std::io::Result<()> {
         tera.autoescape_on(vec!["html.j2"]);
 
         App::new()
+            .wrap(Logger::default())
+            // .wrap(Logger::new("%a %{User-Agent}i"))
             // .app_data(todos.clone())
             .app_data(todo_state.clone())
             .data(tera)
@@ -192,7 +197,7 @@ async fn main() -> std::io::Result<()> {
             .service(post_complete_todo)
             .service(actix_files::Files::new("/static", "./static"))
     })
-    .bind("0.0.0.0:8080")?
+    .bind("0.0.0.0:8081")?
     .run()
     .await
 }

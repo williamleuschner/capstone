@@ -16,3 +16,5 @@ todo-list = { path = "../todo-list" }
 tera = "1"
 hyper = "0.14.10"
 uuid = { version = "0.8", features = ["v4", "serde"] }
+log = "0.4"
+env_logger = "0.9"

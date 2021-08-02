@@ -11,6 +11,9 @@ use thruster::{MiddlewareNext, MiddlewareResult};
 use thruster::middleware::file::file;
 use todo_list::{IncomingTodo, Todo, TodoList};
 use uuid::Uuid;
+use std::time::Instant;
+use log::info;
+use env_logger::Env;
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -255,7 +258,6 @@ async fn post_complete_todo(mut context: Ctx, _next: MiddlewareNext<Ctx>) -> Mid
 
 #[middleware_fn]
 async fn get_index(mut req_context: Ctx, _next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
-    println!("GET / HTTP/1.1");
     let tera = req_context.extra.tera.clone();
     let tera = tera.read().unwrap();
     let todos = req_context.extra.todos.clone();
@@ -285,9 +287,30 @@ async fn get_index(mut req_context: Ctx, _next: MiddlewareNext<Ctx>) -> Middlewa
     Ok(req_context)
 }
 
+#[middleware_fn]
+async fn profiling(mut context: Ctx, next: MiddlewareNext<Ctx>) -> MiddlewareResult<Ctx> {
+    let start_time = Instant::now();
+
+    context = next(context).await?;
+
+    let elapsed_time = start_time.elapsed();
+    if let Some(ref req) = context.hyper_request {
+        info!(
+            "[{}μs] {} -- {}",
+            elapsed_time.as_micros(),
+            req.request.method(),
+            req.request.uri()
+        );
+    }
+
+    Ok(context)
+}
+
 fn main() {
     println!("Starting server...");
-
+    
+    env_logger::from_env(Env::default().default_filter_or("info")).init();
+    
     let mut tera = match Tera::new("templates/*.j2") {
         Ok(t) => t,
         Err(e) => {
@@ -308,30 +331,30 @@ fn main() {
     // _app.use_middleware("/", profiling);
 
     // app.get("/greeting/:name", vec![greet]);
-    app.set404(async_middleware!(Ctx, [not_found_404]));
+    app.set404(async_middleware!(Ctx, [profiling, not_found_404]));
     // This doesn't appear to work. I asked in the Thruster discord.
-    app.get("/", async_middleware!(Ctx, [get_index]));
+    app.get("/", async_middleware!(Ctx, [profiling, get_index]));
     // But this one does, so I'm working around it temporarily until I get an answer.
-    app.get("/index.html", async_middleware!(Ctx, [get_index]));
+    app.get("/index.html", async_middleware!(Ctx, [profiling, get_index]));
     app.post(
         "/new",
-        async_middleware!(Ctx, [query_params, post_new_todo]),
+        async_middleware!(Ctx, [profiling, query_params, post_new_todo]),
     );
-    app.get("/new", async_middleware!(Ctx, [get_new_todo]));
+    app.get("/new", async_middleware!(Ctx, [profiling, get_new_todo]));
     app.post(
         "/edit",
-        async_middleware!(Ctx, [query_params, post_edit_todo]),
+        async_middleware!(Ctx, [profiling, query_params, post_edit_todo]),
     );
     app.get(
         "/edit",
-        async_middleware!(Ctx, [query_params, get_edit_todo]),
+        async_middleware!(Ctx, [profiling, query_params, get_edit_todo]),
     );
     app.post(
         "/complete",
-        async_middleware!(Ctx, [query_params, post_complete_todo]),
+        async_middleware!(Ctx, [profiling, query_params, post_complete_todo]),
     );
     app.get("/static/*", async_middleware!(Ctx, [file]));
 
     let server = HyperServer::new(app);
-    server.start("0.0.0.0", 8080);
+    server.start("0.0.0.0", 8082);
 }
