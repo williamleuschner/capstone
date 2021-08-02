@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "todo-list",
+    "todo-actix",
+    "todo-thruster",
+    "load-test"
+]
