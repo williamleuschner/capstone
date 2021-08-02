@@ -192,7 +192,7 @@ async fn main() -> std::io::Result<()> {
             .service(post_complete_todo)
             .service(actix_files::Files::new("/static", "./static"))
     })
-    .bind("127.0.0.1:8080")?
+    .bind("0.0.0.0:8080")?
     .run()
     .await
 }
